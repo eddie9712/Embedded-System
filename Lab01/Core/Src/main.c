@@ -53,7 +53,8 @@
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 void ButtonHandler(void *);
-void LEDHandler(void *);
+void state1(void *);
+void state2(void *);
 //void vTaskStartScheduler(void);
 
 /* USER CODE BEGIN PFP */
@@ -63,6 +64,8 @@ void LEDHandler(void *);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 QueueHandle_t xQueue1;
+TaskHandle_t xHandle2;
+TaskHandle_t xHandle3;
 /* USER CODE END 0 */
 
 /**
@@ -96,8 +99,10 @@ int main(void)
   /* USER CODE BEGIN 2 */
   xQueue1=xQueueCreate(1,sizeof(int));     //create a queue
 
-  xTaskCreate(ButtonHandler,"task1",1024,(void *)1,1,NULL);
-  xTaskCreate(LEDHandler,"task2",1024,(void *)1,1,NULL);
+  xTaskCreate(ButtonHandler,"task1",1024,(void *)1,2,NULL);
+  xTaskCreate(state1,"task2",1024,(void *)1,1,&Handle2);    //for blinking the LED
+  xTaskCreate(state2,"task3",1024,(void *)1,1,&Handle3);    
+
   vTaskStartScheduler();
 
   /* USER CODE END 2 */
@@ -184,14 +189,28 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
-void LEDHandler(void *pvParameter)
+void state2()
 {
-	int flag=0;
+  int mes2=0;
+  for(;;)
+  {
+    xQueueReceive(xQueue1,&mes2,0);
+    if(mes2 == 2)
+    {
+       HAL_GPIO_WritePin(RED_LED_GPIO_Port,GPIO_PIN_14,GPIO_PIN_SET);
+       vTaskDelay(1000);
+       HAL_GPIO_WritePin(RED_LED_GPIO_Port,GPIO_PIN_14,GPIO_PIN_RESET);
+       vTaskDelay(1000);
+    }
+  }
+}
+void state1(void *pvParameter)
+{
+	int mes1=0;
 	for(;;)
 	{
-	   //first state
-	   xQueueReceive(xQueue1,&flag,0);
-	   if(flag==1)
+	   xQueueReceive(xQueue1,&mes1,0);
+	   if(mes1 == 1)
 	   {
 		   HAL_GPIO_WritePin(GREEN_LED_GPIO_Port,GPIO_PIN_12,GPIO_PIN_SET);
 		   vTaskDelay(5000);
@@ -200,27 +219,40 @@ void LEDHandler(void *pvParameter)
 		   vTaskDelay(5000);
 		   HAL_GPIO_WritePin(RED_LED_GPIO_Port,GPIO_PIN_14,GPIO_PIN_RESET);
 	   }
-	   else if(flag==2)
-	   {
-		   HAL_GPIO_WritePin(RED_LED_GPIO_Port,GPIO_PIN_14,GPIO_PIN_SET);
-		   vTaskDelay(1000);
-		   HAL_GPIO_WritePin(RED_LED_GPIO_Port,GPIO_PIN_14,GPIO_PIN_RESET);
-		   vTaskDelay(1000);
-	   }
 	 }
 }
 void ButtonHandler(void *pvParameter)
 {
-	int mes=0;
+   int mes=1;
 	for(;;)
 	{
-	   if(HAL_GPIO_ReadPin(BLUE_BUTTON_GPIO_Port,GPIO_PIN_0))
-	  {
-		  mes=(mes == 1 ? 2 : 1);
-		  xQueueOverwrite( xQueue1, &mes );
-	  }
+	     while(!HAL_GPIO_ReadPin(BLUE_BUTTON_GPIO_Port,GPIO_PIN_0)){
+			    vTaskDelay(5);
+			}
+			vTaskDelay(60);
+			if(HAL_GPIO_ReadPin(BLUE_BUTTON_GPIO_Port,GPIO_PIN_0)){
+				if(mes==1)
+				{
+					mes=2;
+					vTaskSuspend(xHandle2);
+					HAL_GPIO_WritePin(RED_LED_GPIO_Port,GPIO_PIN_14,GPIO_PIN_RESET);
+					HAL_GPIO_WritePin(GREEN_LED_GPIO_Port,GPIO_PIN_12,GPIO_PIN_RESET);
+					vTaskResume(xHandle3);
+				}
+				else if(mes==2)
+	        	{
+					mes=1;
+					vTaskSuspend(xHandle3);
+					HAL_GPIO_WritePin(RED_LED_GPIO_Port,GPIO_PIN_14,GPIO_PIN_RESET);
+					HAL_GPIO_WritePin(GREEN_LED_GPIO_Port,GPIO_PIN_12,GPIO_PIN_RESET);
+                    vTaskResume(xHandle2);
 
-	}
+		        }
+				xQueueOverwrite( xQueue1, &mes);
+			}
+			   vTaskDelay(60);
+
+	  }
 }
 /* USER CODE END 4 */
 
